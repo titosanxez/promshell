@@ -49,7 +49,7 @@ class TestArgCompleter(unittest.TestCase):
         dict(line='-', expected=['<pos1>', '-o1', '-o2']), #DASH_ONLY
         dict(line='- ', expected=['-o1', '-o2']), #DASH_ONLY_SPACE
         dict(line='-o1', expected=['<pos1>', '-o1', '-o2']), #SINGLE_OPTION
-        dict(line='-o1 ', expected=ARG_DESCRIPTION[1].value), #3INGLE_OPTION_W_SPACE
+        dict(line='-o1 ', expected=ARG_DESCRIPTION[1].choices), #3INGLE_OPTION_W_SPACE
         dict(line='-o1 value', expected=['val1', 'val2']), #SINGLE_OPTION_W_VALUE
         dict(line='-o1 value ', expected=['<pos1>', '-o2']), #SINGLE_OPTION_W_VALUE_AND_SPACE
         dict(line='-o1 value pos1', expected=['<pos1>', '-o2']), #SINGLE_OPTION_W_VALUE_W_POSITIONAL
@@ -57,12 +57,12 @@ class TestArgCompleter(unittest.TestCase):
         dict(line='pos1', expected=['<pos1>', '-o1', '-o2']),  # ONE_POSITIONAL
         dict(line='pos1 ', expected=['-o1', '-o2']),  #ONE_POSITIONAL_AND_SPACE
         dict(line='pos1 -o1', expected=['-o1', '-o2']),  # POSITIONAL_W_OPTION
-        dict(line='pos1 -o1 ', expected=ARG_DESCRIPTION[1].value),  # POSITIONAL_W_OPTION_AND_SPACE
-        dict(line='pos1 -o1 value', expected=ARG_DESCRIPTION[1].value),  # POSITIONAL_W_OPTION_W_VALUE
+        dict(line='pos1 -o1 ', expected=ARG_DESCRIPTION[1].choices),  # POSITIONAL_W_OPTION_AND_SPACE
+        dict(line='pos1 -o1 value', expected=ARG_DESCRIPTION[1].choices),  # POSITIONAL_W_OPTION_W_VALUE
         dict(line='pos1 -o1 value ', expected=['-o2']),  # POSITIONAL_W_OPTION_W_VALUE_AND_SPACE
-        dict(line='-o1 -o2', expected=ARG_DESCRIPTION[1].value),  # TWO_OPTIONS
-        dict(line='-o1 -o2 ', expected=ARG_DESCRIPTION[2].value),  # TWO_OPTIONS_AND_SPACE
-        dict(line='-o1 -o2 val', expected=ARG_DESCRIPTION[2].value),  # TWO_OPTIONS_W_VALUE
+        dict(line='-o1 -o2', expected=ARG_DESCRIPTION[1].choices),  # TWO_OPTIONS
+        dict(line='-o1 -o2 ', expected=ARG_DESCRIPTION[2].choices),  # TWO_OPTIONS_AND_SPACE
+        dict(line='-o1 -o2 val', expected=ARG_DESCRIPTION[2].choices),  # TWO_OPTIONS_W_VALUE
         dict(line='-o1 -o2 val ', expected=['<pos1>']),  # TWO_OPTIONS_W_VALUE_AND_SPACE
     ]
     

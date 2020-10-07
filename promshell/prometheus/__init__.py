@@ -1,5 +1,5 @@
 from .handlers import GetQuery, GetSeries,  GetLabels
-from .rest_builder import Query, Series, Labels, ArgDescription, OptionKind
+from .rest_builder import Query, Series, Labels, HttpRequestInfo
 
 __all__ = [
     #handlers
@@ -10,6 +10,5 @@ __all__ = [
     'Query',
     'Series',
     'Labels',
-    'ArgDescription',
-    'OptionKind'
+    'HttpRequestInfo'
 ]

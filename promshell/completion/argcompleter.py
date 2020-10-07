@@ -1,23 +1,94 @@
 from abc import ABC, abstractmethod
-from typing import List, Iterable
+from typing import List, Iterable, Mapping
 
-from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.document import Document
+from prompt_toolkit.completion import Completer, Completion, CompleteEvent
 from prompt_toolkit.completion.word_completer import WordCompleter
-from promshell.prometheus.rest_builder import Series
+from promshell.arguments import ArgDescriptor
 
-class UpdatableCompleter(Completer, ABC):
-    def __init__(self, params):
-        self.completer = self.from_params(params)
+class CompletionContext:
+    def __init__(
+            self,
+            document: Document,
+            event: CompleteEvent,
+            arg_descriptor: ArgDescriptor,
+            word: str = ''):
+        self.document = document
+        self.event = event
+        self.arg_descriptor = arg_descriptor
+        self.word = word
 
-    def get_completions(self, document, complete_event):
-        return self.completer.get_completions(document, complete_event)
 
-    def update(self, params):
-        self.completer = self.from_params(params)
-
+class ValueCompleter(ABC):
     @abstractmethod
-    def from_params(self, params):
+    def get_completions(self, context: CompletionContext) -> Iterable[Completion]:
         NotImplemented
+
+
+class KeyValueCompleter(ValueCompleter):
+    def __init__(self, key_names: List[str], operators: List[str]):
+        self.key_names = key_names
+        self.operators = operators
+
+    def get_completions(
+            self,
+            context: CompletionContext) -> Iterable[Completion]:
+        """Returns a list of completions based on the state of the key-value
+        expression in the word.
+        Possible outcomes are:
+
+            - List of all keys
+            - List of non-specified keys
+            - Operator
+            - Any value for the key (empty completion)
+
+        Whichever the outcome list, it will include a 'comma' as key-value separator
+        """
+
+        if not self.key_names:
+            yield Completion('', start_position=0)
+
+        # Copy the list of values, from which we remove elements as they are found
+        # in the word
+        provide_keys = True
+        used_keys = self.key_names.copy()
+        key_value_items = context.word.split(',')
+        while key_value_items:
+            key_value = key_value_items.pop(0)
+            key = key_value
+            value = ''
+            # separate key from value
+            expression = []
+            for op in ['=', '=~', '!=', '!~']:
+                expression = key_value.partition(op)
+                if expression[1] != '':
+                    key = expression[0]
+                    value = expression[2]
+                    break
+
+            if key_value_items:
+                # If this is not the last key-value, remove it from the available key
+                if key in used_keys:
+                    used_keys.remove(key)
+            else:
+                # last key-value determines what to actually complete
+                if expression[0] != '' and expression[1] == '':
+                    provide_keys = False
+                    for op in ['=', '=~', '!=', '!~']:
+                        yield Completion(op, start_position=0)
+                elif expression[1] != '':
+                    provide_keys = False
+                    if value != '':
+                        yield Completion(',', start_position=0)
+                    else:
+                        yield Completion('<value>[,]', start_position=0)
+                elif value != '':
+                    yield Completion(',', start_position=0)
+
+        if provide_keys:
+            for key in used_keys:
+                # provide a list of extended items
+                yield Completion(key, start_position=0)
 
 
 class ArgumentCompleter(Completer):
@@ -33,112 +104,90 @@ class ArgumentCompleter(Completer):
           it will autocomplete only the possible values and not the other options.
     """
 
-    def __init__(self, arg_desc):
-        if not isinstance(arg_desc, list):
-            raise ValueError("argument description is not a dictionary")
+    def __init__(self, arg_desc_set: Mapping[str, dict], completer: ValueCompleter = None):
+        if isinstance(arg_desc_set, dict):
+            self.arg_desc_list = []
+            for key in arg_desc_set:
+                self.arg_desc_list.append(ArgDescriptor(key, **arg_desc_set[key]))
+        elif isinstance(arg_desc_set, list):
+            self.arg_desc_list = arg_desc_set
+        else:
+            raise ValueError("argument description is not a dictionary or list ")
 
-        self.arg_desc_list = arg_desc
+        self.value_completer = completer
 
     class State:
-        def __init__(self, document, event, word_list, desc_list):
+        def __init__(
+                self,
+                document: Document,
+                event: CompleteEvent,
+                word_list: List[str],
+                arg_desc_list: List[ArgDescriptor],
+                completer: ValueCompleter):
             self.document = document
             self.event = event
+            self.trailing_space = document.text.endswith(' ')
             self.word_list = word_list
-            self.desc_list = desc_list
-            self.last_desc = None
-            self.value_list = None
-            self.trailing_space = False
-
-        pass
+            self.arg_desc_list = arg_desc_list.copy()
+            self.arg_descriptor = None
+            self.completer = completer
 
         def remove_positional(self):
             # positional arg: remove first POSITIONAL arg from description list
-            for desc in self.desc_list:
+            for desc in self.arg_desc_list:
                 if desc.is_positional():
-                    self.desc_list.remove(desc)
+                    self.arg_desc_list.remove(desc)
                     break
 
-        def items(self) -> Iterable[Completion]:
+        def completion_for_argument_set(self) -> Iterable[Completion]:
             completion_items = []
-            for desc in self.desc_list:
-                if not desc.is_positional():
-                    completion_items.append(desc.name)
-                else:
+            for arg_descriptor in self.arg_desc_list:
+                if arg_descriptor.is_positional():
                     # add remaining positionals
-                    if desc.value:
-                        for value in desc.value:
-                            completion_items.append(value)
+                    if self.completer:
+                        context = CompletionContext(
+                            self.document,
+                            self.event,
+                            arg_descriptor
+                        )
+                        for c in self.completer.get_completions(context):
+                            yield c
                     else:
-                        completion_items.append(desc.name)
+                        for value in arg_descriptor.choices:
+                            completion_items.append(value)
+                else:
+                    completion_items.append(arg_descriptor.flags[0])
 
             completer = WordCompleter(completion_items)
+            for c in completer.get_completions(self.document, self.event):
+                yield c
+
+        def completion_for_option(self, word: str) -> Iterable[Completion]:
+            if self.arg_descriptor.is_flag():
+                return self.completion_for_argument_set()
+
+            if self.completer:
+                context = CompletionContext(
+                    self.document,
+                    self.event,
+                    self.arg_descriptor,
+                    word
+                )
+                return self.completer.get_completions(context)
+
+            completer = WordCompleter(self.arg_descriptor.choices)
             return completer.get_completions(self.document, self.event)
 
-        def items_for_keyvalue(self, word: str) -> Iterable[Completion]:
-            """Returns a list of completions based on the state of the key-value
-               expression in the word.
-               Possible outcomes are:
-               - List of all keys
-               - List of non-specified keys
-               - Operator
-               - Any value for the key (empty completion)
+        def find_option(self, name) -> ArgDescriptor:
+            for desc in self.arg_desc_list:
+                if (not desc.is_positional()) and name in desc.flags:
+                    return desc
 
-               Whichever the outcome list, it will include a 'comma' as key-value separator
-            """
+            return None
 
-            if not self.last_desc.value:
-                yield Completion('', start_position=0)
-
-            # Copy the list of values, from which we remove elements as they are found
-            # in the word
-            provide_keys = True
-            items = self.last_desc.value.copy()
-            keyval_elements = word.split(',')
-            while keyval_elements:
-                keyval = keyval_elements.pop(0)
-                key = keyval
-                val = ''
-                # separate key from value
-                expression = []
-                for op in promrest_builder.Series.OPERATORS:
-                    expression = keyval.partition(op)
-                    if expression[1] != '':
-                        key = expression[0]
-                        val = expression[2]
-                        break
-
-                if keyval_elements:
-                    # If this is not the last keyval, remove it from the available key
-                    if key in items:
-                        items.remove(key)
-                else:
-                    # last keyval determines what to actually complete
-                    if expression[0] != '' and expression[1] == '':
-                        provide_keys = False
-                        for op in promrest_builder.Series.OPERATORS:
-                            yield Completion(op, start_position=0)
-                    elif expression[1] != '':
-                        provide_keys = False
-                        if expression[2] != '':
-                            yield Completion(',', start_position=0)
-                        else:
-                            yield Completion('<value>[,]', start_position=0)
-                    elif expression[2] != '':
-                        yield Completion(',', start_position=0)
-
-            if provide_keys:
-                for key in items:
-                    # provide a list of extended items
-                    yield Completion(key, start_position=0)
-
-        def items_for_arg(self, word: str) -> Iterable[Completion]:
-            if self.last_desc.is_keyvalue():
-                return self.items_for_keyvalue(word)
-            elif self.last_desc.is_flag():
-                return self.items()
-            else:
-                completer = WordCompleter(self.last_desc.value)
-                return completer.get_completions(self.document, self.event)
+    #
+    # ArgumentCompleter implementation
+    #
 
     def resolve_completion(self, state: State) -> Iterable[Completion]:
         """Recursive operation that traverses the list of words, processing one
@@ -146,40 +195,40 @@ class ArgumentCompleter(Completer):
 
         if not state.word_list:
             # In the absence of words or last word, we display the available options
-            return state.items()
+            return state.completion_for_argument_set()
 
         # iterate over all the words except the last one, which will determine
         # which completion to show.
         word = state.word_list.pop(0)
         last_word = not state.word_list
-        matching_arg = ArgumentCompleter.find_option(state.desc_list, word)
+        matching_arg = state.find_option(word)
 
         if last_word:
             # base case is the last word, which determines what the completion list
             # should be
             if state.trailing_space:
                 if matching_arg:
-                    state.last_desc = matching_arg
-                    return state.items_for_arg('')
-                elif not state.last_desc:
+                    state.arg_descriptor = matching_arg
+                    return state.completion_for_option('')
+                elif not state.arg_descriptor:
                     state.remove_positional()
             else:
-                if state.last_desc:
-                    return state.items_for_arg(word)
+                if state.arg_descriptor:
+                    return state.completion_for_option(word)
 
-            return state.items()
+            return state.completion_for_argument_set()
 
         # else: For all previous word, skip one-time options and values that have been
         # already specified
         if matching_arg:
-            state.desc_list.remove(matching_arg)
-            state.last_desc = matching_arg
+            state.arg_desc_list.remove(matching_arg)
+            state.arg_descriptor = matching_arg
         else:
-            if state.last_desc is None:
+            if state.arg_descriptor is None:
                 # positional
                 state.remove_positional()
                 # either positional or option value, we set the last option desc to None
-            state.last_desc = None
+            state.arg_descriptor = None
 
         return self.resolve_completion(state)
 
@@ -201,19 +250,11 @@ class ArgumentCompleter(Completer):
                 document,
                 complete_event,
                 word_list,
-                self.arg_desc_list.copy())
-        if text.endswith(' '):
-            state.trailing_space = True
+                self.arg_desc_list,
+                self.value_completer)
 
         for item in self.resolve_completion(state):
             yield item
         # Always add an 'empty' item as a way to prevent the prompt from automatically
         # adding the last remaining choice
         yield Completion('')
-
-    def find_option(argdesc_list, name):
-        for desc in argdesc_list:
-            if (not desc.is_positional()) and name == desc.name:
-                return desc
-
-        return None

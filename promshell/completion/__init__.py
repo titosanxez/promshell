@@ -1,5 +1,12 @@
-from .argcompleter import ArgumentCompleter
+from .argcompleter import \
+    ArgumentCompleter, \
+    ValueCompleter, \
+    KeyValueCompleter, \
+    CompletionContext
 
 __all__ = [
-    'ArgumentCompleter'
+    'ArgumentCompleter',
+    'ValueCompleter',
+    'KeyValueCompleter',
+    'CompletionContext'
 ]
