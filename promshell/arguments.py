@@ -22,11 +22,12 @@ class ArgDescriptor(dict):
         else:
             self.flags = [name]
 
-        if not 'metavar' in kwargs:
-            dest = self.get('dest')
-            if not dest:
-                dest = name
-            self['metavar'] = '<%s>' % dest
+        if not self.is_flag():
+            if not 'metavar' in kwargs:
+                dest = self.get('dest')
+                if not dest:
+                    dest = name
+                self['metavar'] = '<%s>' % dest
 
     @property
     def action(self) -> str:

@@ -1,73 +1,36 @@
 # To change this license header, choose License Headers in Project Properties.
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
-import http.client
+from abc import ABC, abstractmethod
 import pprint
 from enum import Enum
 import argparse
-from typing import Mapping, List, Iterable
+from typing import  Iterable
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import \
     Completion,\
     Completer, \
     NestedCompleter, \
     WordCompleter
 
-from . import arguments
 from .completion import ArgumentCompleter, ValueCompleter, CompletionContext
-from .prometheus import *
-from .handler import CommandHandler
 from . import arguments
 
 
-# ==============================================
-# Sub-commands Actions handled by PromStat class
-# ==============================================
+# ================
+# Command Handling
+# ================
 
-class BuiltinAction(Enum):
-    EXIT = "exit"
-    HELP = "help"
+# Interface for command handling
+class CommandHandler(ABC):
 
-
-class ExitAction(CommandHandler):
-    ARG_SPEC = {}
-
-    def __init__(self, prom_stat):
-        self.prom_stat = prom_stat
-
-    def handle(self, command_args):
-        exit()
-
-
-class HelpAction(CommandHandler):
-    ARG_SPEC = {
-        'action': dict(
-            help='command name',
-            nargs='?',
-            metavar='<command>'),
-    }
-
-    def __init__(self, parsers: Mapping[str, argparse.ArgumentParser]):
-        self.parsers = parsers
-
+    @abstractmethod
     def handle(self, command_args) -> dict:
-        if command_args.action:
-            self.parsers[command_args.action].print_help()
-        else:
-            self.parsers[BuiltinAction.HELP.value].print_help()
-
-        return None
+        NotImplemented
 
     def get_completions(self, context: CompletionContext) -> Iterable[Completion]:
-        command_names = []
-        for command in self.parsers:
-            command_names.append(command)
-
-        return WordCompleter(command_names).get_completions(
-            context.document,
-            context.event)
+        pass
 
 
 # ==============
@@ -95,51 +58,45 @@ class ShellCompleter(Completer):
 # Main Class
 # ==========
 
-class ShellProperty:
-    def __init__(self):
-        self.prompt_name = ""
-        self.address = ""
-
+class BuiltinAction(Enum):
+    EXIT = "exit"
+    HELP = "help"
 
 class Shell:
     """
         Generic shell class. Handles the interactive command session and
         processing of commands,
     """
-    BUILTIN_HANDLERS_SPEC = {
-        BuiltinAction.HELP.value: {
-            'help': 'print a command help',
-            'arg_spec': HelpAction.ARG_SPEC
-        },
-        BuiltinAction.EXIT.value: {
-            'help': 'exits the shell',
-            'arg_spec': ExitAction.ARG_SPEC
+    @staticmethod
+    def builtin_handlers_spec() -> dict():
+        return {
+            BuiltinAction.HELP.value: {
+                'help': 'print a command help',
+                'arg_spec': Shell.HelpAction.ARG_SPEC
+            },
+            BuiltinAction.EXIT.value: {
+                'help': 'exits the shell',
+                'arg_spec': Shell.ExitAction.ARG_SPEC
+            }
         }
-    }
 
-    def __init__(self, shell_name: str):
+    def __init__(
+            self,
+            parser_config: dict = dict(),
+            prompt_config: dict = dict()):
         # List of available handler_map
         self.handler_map = {}
 
         # Handler ArgumentParser and subparser (for help and validation)
-        self.parser = argparse.ArgumentParser(
-                prog=shell_name,
-                description='Simple command-line interface to access DDS metrics from Prometheus',
-                add_help=True,
-                usage=None,
-                conflict_handler='resolve')
+        self.parser = argparse.ArgumentParser(**parser_config)
         self.subparser_map = {}
         self.subparsers = self.parser.add_subparsers(
                 help='available commands',
                 dest='command')
 
+        overriden_prompt_config = prompt_config.copy()
         self.completer = ShellCompleter()
-        self.prompt = PromptSession(
-                message='%s> ' % shell_name,
-                completer=self.completer,
-                complete_while_typing=False,
-                complete_in_thread=True,
-                history=FileHistory("./test_hist"))
+        self.prompt = PromptSession(**prompt_config, completer=self.completer)
         
         # printer for result
         self.printer = pprint.PrettyPrinter(indent=4)
@@ -151,17 +108,17 @@ class Shell:
         # Help
         self.register_handler(
             BuiltinAction.HELP.value,
-            HelpAction(self.subparser_map),
-            arguments=Shell.BUILTIN_HANDLERS_SPEC[BuiltinAction.HELP.value]['arg_spec'],
-            help=Shell.BUILTIN_HANDLERS_SPEC[BuiltinAction.HELP.value]['help']
+            Shell.HelpAction(self),
+            arguments=Shell.builtin_handlers_spec()[BuiltinAction.HELP.value]['arg_spec'],
+            help=Shell.builtin_handlers_spec()[BuiltinAction.HELP.value]['help']
         )
 
         # Exit
         self.register_handler(
             BuiltinAction.EXIT.value,
-            ExitAction(self),
-            arguments=Shell.BUILTIN_HANDLERS_SPEC[BuiltinAction.EXIT.value]['arg_spec'],
-            help=Shell.BUILTIN_HANDLERS_SPEC[BuiltinAction.EXIT.value]['help']
+            Shell.ExitAction(self),
+            arguments=Shell.builtin_handlers_spec()[BuiltinAction.EXIT.value]['arg_spec'],
+            help=Shell.builtin_handlers_spec()[BuiltinAction.EXIT.value]['help']
         )
 
     def register_handler(
@@ -217,4 +174,44 @@ class Shell:
 
         def get_completions(self, context) -> Iterable[Completion]:
             return self.handler.get_completions(context)
+
+    #
+    # Builtin Handlers
+    #
+    class HelpAction(CommandHandler):
+        ARG_SPEC = {
+            'action': dict(
+                help='command name',
+                nargs='?',
+                metavar='<command>'),
+        }
+
+        def __init__(self, shell):
+            self.shell : Shell = shell
+
+        def handle(self, command_args) -> dict:
+            if command_args.action:
+                self.shell.subparser_map[command_args.action].print_help()
+            else:
+                self.shell.parser.print_help()
+
+            return None
+
+        def get_completions(self, context: CompletionContext) -> Iterable[Completion]:
+            command_names = []
+            for command in self.parsers:
+                command_names.append(command)
+
+            return WordCompleter(command_names).get_completions(
+                context.document,
+                context.event)
+
+    class ExitAction(CommandHandler):
+        ARG_SPEC = {}
+
+        def __init__(self, shell):
+            self.shell: Shell = shell
+
+        def handle(self, command_args):
+            exit()
 

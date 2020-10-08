@@ -6,7 +6,7 @@ from argparse import Namespace
 
 from prompt_toolkit.completion import Completion, WordCompleter
 
-from promshell.handler import CommandHandler
+from promshell.shell import CommandHandler
 from promshell.completion import CompletionContext, KeyValueCompleter
 from .rest_builder import Query, Series, Labels, HttpRequestInfo
 
