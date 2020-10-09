@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import json
 import http.client
 from typing import List, Iterable
@@ -6,9 +6,9 @@ from argparse import Namespace
 
 from prompt_toolkit.completion import Completion, WordCompleter
 
-from promshell.shell import CommandHandler
-from promshell.completion import CompletionContext, KeyValueCompleter
-from .rest_builder import Query, Series, Labels, HttpRequestInfo
+from shell.shell import CommandHandler
+from shell.completion import CompletionContext, KeyValueCompleter
+from promshell.rest_builder import Query, Series, Labels, HttpRequestInfo
 
 HTTP_REQUEST_HEADERS = {
     "Content-type": "application/x-www-form-urlencoded"

@@ -6,7 +6,7 @@ import unittest
 
 from prompt_toolkit.document import Document
 from promshell.prometheus import ArgDescription, OptionKind
-from promshell.completion import ArgumentCompleter
+from shell.completion import ArgumentCompleter
 
 class TestArgCompleter(unittest.TestCase):
 

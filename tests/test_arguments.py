@@ -1,9 +1,8 @@
-import enum
 import unittest
 import argparse
 
-import promshell.arguments as arguments
-from promshell.arguments import ArgDescriptor
+import shell.arguments as arguments
+
 
 class TestArgumentDesc(unittest.TestCase):
 

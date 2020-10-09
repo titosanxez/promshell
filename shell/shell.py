@@ -7,8 +7,6 @@ from enum import Enum
 import argparse
 from typing import  Iterable
 
-import prompt_toolkit
-from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import \
     Completion,\
     Completer, \
@@ -17,11 +15,10 @@ from prompt_toolkit.completion import \
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
-from prompt_toolkit.key_binding.bindings import basic
 from prompt_toolkit.shortcuts import PromptSession
 
-from .completion import ArgumentCompleter, ValueCompleter, CompletionContext
-from . import arguments
+from shell.completion import ArgumentCompleter, ValueCompleter, CompletionContext
+from shell import arguments
 
 
 # ================

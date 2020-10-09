@@ -4,7 +4,8 @@ from typing import List, Iterable, Mapping
 from prompt_toolkit.document import Document
 from prompt_toolkit.completion import Completer, Completion, CompleteEvent
 from prompt_toolkit.completion.word_completer import WordCompleter
-from promshell.arguments import ArgDescriptor
+
+from shell.arguments import ArgDescriptor
 
 
 class CompletionContext:
@@ -299,7 +300,7 @@ class ArgumentCompleter(Completer):
             :return: yields `Completions`
             """
 
-            if self.arg_descriptor.is_flag():
+            if self.arg_descriptor.is_switch():
                 return self.completion_for_argument_set()
 
             return self.completion_for_values(self.arg_descriptor, word)
@@ -372,8 +373,7 @@ class ArgumentCompleter(Completer):
         """
             Generates completions for the current command option line.
         """
-        
-        # Get option line decomposed in words separated by spaces
+
         text = document.text.lstrip()
         word_list = text.split()
         state = self.State(
