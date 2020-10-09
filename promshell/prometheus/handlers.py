@@ -132,31 +132,8 @@ class GetLabels(AbstractGetHandler):
             choices = [context.arg_descriptor.metavar]
             color = 'fg:ansired'
 
-        return super().get_word_completions_for_choices(context, choices, color)
+        return super().complete_word_for_choices(context, choices, color)
 
-
-# class FetchMetricsAndLabels(CommandHandler):
-#     def __init__(self, http_conn):
-#         self.http_conn = http_conn
-#         self.metrics = []
-#         self.labels = []
-#
-#     def handle(self, command_args) -> str:
-#         self.fetch()
-#         return "{'result': 'Metrics and Labels fetched OK'}"
-#
-#     def fetch(self):
-#         # Fetch metric names
-#         result = handle_request(
-#             self.http_conn,
-#             Labels.build(Namespace(labels='__name__')))
-#         self.metrics = result['data']
-#
-#         # Fetch label names
-#         result = handle_request(
-#             self.http_conn,
-#             Labels.build(Namespace(labels='')))
-#         self.labels = result['data']
 
 SERVER_ADDRESS_DEFAULT = 'localhost:9090'
 

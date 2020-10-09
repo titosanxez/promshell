@@ -110,6 +110,7 @@ class Shell:
         @self.key_bindings.add(Keys.Escape)
         def on_escape(event: KeyPressEvent):
             event.current_buffer.cancel_completion()
+            event.current_buffer.exit_selection()
 
         # Control + c binding
         @staticmethod
@@ -121,8 +122,9 @@ class Shell:
             **prompt_config,
             completer=self.completer,
             key_bindings=self.key_bindings)
+        # Reduce the lag for the escape key
+        self.prompt.app.timeoutlen = 0.2
 
-        
         # printer for result
         self.printer = pprint.PrettyPrinter(indent=4)
 
