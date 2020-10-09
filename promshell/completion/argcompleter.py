@@ -252,7 +252,7 @@ class ArgumentCompleter(Completer):
             completion_items = []
             for arg_descriptor in self.arg_desc_list:
                 if arg_descriptor.is_positional():
-                    for c in self.completion_for_positional(arg_descriptor):
+                    for c in self.completion_for_values(arg_descriptor):
                         yield c
                 else:
                     completion_items.append(arg_descriptor.flags[0])
@@ -261,20 +261,19 @@ class ArgumentCompleter(Completer):
             for c in completer.get_completions(self.document, self.event):
                 yield c
 
-        def completion_for_positional(
+        def completion_for_values(
                 self,
                 arg_descriptor: ArgDescriptor,
                 word: str = '') -> Iterable[Completion]:
             """
-            Generates the completions for the specified positional argument.
+            Generates the completions for the specified argument.
 
-            :param arg_descriptor: Descriptor for the positional argument
+            :param arg_descriptor: Descriptor for the argument
             :type arg_descriptor: `shell.arguments.ArgDescriptor`
             :param word: Text word upon the completion is invoked. Default is ''
             :type word: str
             :return: yields `Completions`
             """
-            assert arg_descriptor.is_positional()
             if self.completer:
                 context = CompletionContext(
                     self.document,
@@ -303,7 +302,7 @@ class ArgumentCompleter(Completer):
             if self.arg_descriptor.is_flag():
                 return self.completion_for_argument_set()
 
-            return self.completion_for_positional(self.arg_descriptor)
+            return self.completion_for_values(self.arg_descriptor, word)
 
         def find_option_argument(self, name) -> ArgDescriptor:
             """
