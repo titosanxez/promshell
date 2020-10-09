@@ -10,7 +10,6 @@ from promshell.shell import CommandHandler
 from promshell.completion import CompletionContext, KeyValueCompleter
 from .rest_builder import Query, Series, Labels, HttpRequestInfo
 
-
 HTTP_REQUEST_HEADERS = {
     "Content-type": "application/x-www-form-urlencoded"
 }
@@ -94,11 +93,11 @@ class GetQuery(AbstractGetHandler):
             color = 'fg:ansired'
         return super().complete_word_for_choices(context, choices, color)
 
-    
+
 class GetSeries(AbstractGetHandler):
     def __init__(self, context: HandlerContext):
         super().__init__(context)
-        
+
     def build_request_info(self, command_args):
         return Series.build(command_args)
 
@@ -121,8 +120,8 @@ class GetSeries(AbstractGetHandler):
 class GetLabels(AbstractGetHandler):
     def __init__(self, context: HandlerContext):
         super().__init__(context)
-        
-    def build_request_info(self, parsed_args):        
+
+    def build_request_info(self, parsed_args):
         return Labels.build(parsed_args)
 
     def get_completions(self, context: CompletionContext) -> Iterable[Completion]:
@@ -159,17 +158,21 @@ class GetLabels(AbstractGetHandler):
 #             Labels.build(Namespace(labels='')))
 #         self.labels = result['data']
 
-class HandlerFactory(CommandHandler):
+SERVER_ADDRESS_DEFAULT = 'localhost:9090'
+
+
+class HandlerFactory:
     QUERY = GetQuery.__name__
     SERIES = GetSeries.__name__
     LABELS = GetLabels.__name__
     FETCH = 'HandlerFactory.FETCH'
+    CONNECT = 'HandlerFactory.CONNECT'
 
-    def __init__(self, **kwargs):
-        self.http_connection = None
-        server_address = kwargs.get('server_address')
+    def __init__(self, server_address: str):
+        self.http_connection: http.client.HTTPConnection = None
         if server_address:
             self.http_connection = http.client.HTTPConnection(server_address)
+            self.http_connection.connect()
         self.context = HandlerContext(self.http_connection)
 
         # initialize handlers
@@ -177,7 +180,8 @@ class HandlerFactory(CommandHandler):
             HandlerFactory.QUERY: GetQuery(self.context),
             HandlerFactory.SERIES: GetSeries(self.context),
             HandlerFactory.LABELS: GetLabels(self.context),
-            HandlerFactory.FETCH: self
+            HandlerFactory.FETCH: self.FetchHandler(self),
+            HandlerFactory.CONNECT: self.ConnectHandler(self)
         }
 
     def handler(self, name: str) -> CommandHandler:
@@ -199,3 +203,58 @@ class HandlerFactory(CommandHandler):
         namespace.label = None
         result = self.handler(HandlerFactory.LABELS).handle(namespace)
         self.context.labels = result['data']
+
+    #
+    # Builtin Handlers
+    #
+    class FetchHandler(CommandHandler):
+        ARG_SPEC = {}
+
+        def __init__(self, factory):
+            self.factory: HandlerFactory = factory
+
+        def handle(self, command_args) -> dict:
+            self.factory.fetch()
+            return dict(result='Metrics and labels fetched OK')
+
+    class ConnectHandler(CommandHandler):
+        ARG_SPEC = {
+            'address': dict(
+                help='Prometheus server address',
+                nargs='?',
+                metavar='<server:port>',
+                default=SERVER_ADDRESS_DEFAULT),
+            'timeout': dict(
+                flags=['-t', '--timeout'],
+                help='connection timeout',
+                nargs='?',
+                metavar='<timeout>',
+                type=int),
+        }
+
+        def __init__(self, factory):
+            self.factory: HandlerFactory = factory
+
+        def handle(self, command_args) -> dict:
+            if command_args.address:
+                server_address = command_args.address
+            else:
+                server_address = SERVER_ADDRESS_DEFAULT
+
+            if command_args.timeout:
+                timeout = command_args.timeout
+            else:
+                timeout = None
+
+            current_address = \
+                self.factory.http_connection.host \
+                + '%s' % self.factory.http_connection.port
+            if current_address != server_address:
+                self.factory.http_connection = http.client.HTTPConnection(
+                    server_address,
+                    timeout=timeout)
+                self.factory.http_connection.connect()
+                return dict(
+                    result='Connection established to: %s'
+                           % command_args.address)
+            return dict()

@@ -7,12 +7,18 @@ from enum import Enum
 import argparse
 from typing import  Iterable
 
+import prompt_toolkit
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import \
     Completion,\
     Completer, \
     NestedCompleter, \
     WordCompleter
+from prompt_toolkit.keys import Keys
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding.key_processor import KeyPressEvent
+from prompt_toolkit.key_binding.bindings import basic
+from prompt_toolkit.shortcuts import PromptSession
 
 from .completion import ArgumentCompleter, ValueCompleter, CompletionContext
 from . import arguments
@@ -62,6 +68,7 @@ class BuiltinAction(Enum):
     EXIT = "exit"
     HELP = "help"
 
+
 class Shell:
     """
         Generic shell class. Handles the interactive command session and
@@ -71,19 +78,19 @@ class Shell:
     def builtin_handlers_spec() -> dict():
         return {
             BuiltinAction.HELP.value: {
-                'help': 'print a command help',
+                'help': 'Print command help',
                 'arg_spec': Shell.HelpAction.ARG_SPEC
             },
             BuiltinAction.EXIT.value: {
-                'help': 'exits the shell',
+                'help': 'Exit shell',
                 'arg_spec': Shell.ExitAction.ARG_SPEC
             }
         }
 
     def __init__(
             self,
-            parser_config: dict = dict(),
-            prompt_config: dict = dict()):
+            parser_config: dict,
+            prompt_config: dict):
         # List of available handler_map
         self.handler_map = {}
 
@@ -91,12 +98,30 @@ class Shell:
         self.parser = argparse.ArgumentParser(**parser_config)
         self.subparser_map = {}
         self.subparsers = self.parser.add_subparsers(
-                help='available commands',
+                help='Available commands',
                 dest='command')
 
         overriden_prompt_config = prompt_config.copy()
         self.completer = ShellCompleter()
-        self.prompt = PromptSession(**prompt_config, completer=self.completer)
+        self.key_bindings = KeyBindings()
+
+        # Escape binding
+        @staticmethod
+        @self.key_bindings.add(Keys.Escape)
+        def on_escape(event: KeyPressEvent):
+            event.current_buffer.cancel_completion()
+
+        # Control + c binding
+        @staticmethod
+        @self.key_bindings.add(Keys.ControlC)
+        def on_escape(event: KeyPressEvent):
+            event.app.exit(result=BuiltinAction.EXIT.value)
+
+        self.prompt = PromptSession(
+            **prompt_config,
+            completer=self.completer,
+            key_bindings=self.key_bindings)
+
         
         # printer for result
         self.printer = pprint.PrettyPrinter(indent=4)
@@ -145,7 +170,7 @@ class Shell:
     def run(self):
         while True:
             text = self.prompt.prompt()
-            if text.strip() == '':
+            if text is None or text.strip() == '':
                 continue
 
             # dispatch to appropriate handler

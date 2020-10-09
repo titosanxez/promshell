@@ -14,6 +14,7 @@ class PromshellAction(Enum):
     SERIES = 'series'
     LABELS = 'labels'
     FETCH = 'fetch'
+    CONNECT = 'connect'
 
 
 def program_name() -> str:
@@ -28,20 +29,21 @@ class PromShell:
         history_path='./%s_history' % program_name()
     )
 
-    PARSER_CONFIG_DEFAULT = {
-        'prog': program_name(),
-        'description': 'Interactive command-line interface to obtain information from Prometheus',
-        'add_help': True,
-        'usage': None,
-        'conflict_handler': 'resolve'
-    }
+    PARSER_CONFIG_DEFAULT = dict(
+        prog=program_name(),
+        description='Interactive command-line interface to obtain information from Prometheus',
+        add_help=True,
+        usage=None,
+        conflict_handler='resolve'
+    )
 
-    PROMPT_CONFIG_DEFAULT = {
-        'message': '%s> ' % program_name(),
-        'complete_while_typing': False,
-        'complete_in_thread': True,
-        'history': FileHistory(DEFAULT_CONFIG['history_path'])
-    }
+    PROMPT_CONFIG_DEFAULT = dict(
+        message='%s> ' % program_name(),
+        complete_while_typing=False,
+        complete_in_thread=True,
+        history=FileHistory(DEFAULT_CONFIG['history_path']),
+        mouse_support=True
+    )
 
     ARG_SPEC = {
         'address': dict(
@@ -49,7 +51,7 @@ class PromShell:
             help='Prometheus server address',
             nargs='?',
             metavar='<address>',
-            default='localhost:9090'),
+            default=handlers.SERVER_ADDRESS_DEFAULT),
         'no_fetch': dict(
             flags=['-f', '--no-fetch'],
             action='store_true',
@@ -99,26 +101,19 @@ class PromShell:
         # General
         self.shell.register_handler(
             PromshellAction.FETCH.value,
-            self.FetchHandler(self),
-            arguments=self.FetchHandler.ARG_SPEC,
+            self.factory.handler(handlers.HandlerFactory.FETCH),
+            arguments=handlers.HandlerFactory.FetchHandler.ARG_SPEC,
             help='Fetch Prometheus available metrics and labels, for autocompletion'
+        )
+        self.shell.register_handler(
+            PromshellAction.CONNECT.value,
+            self.factory.handler(handlers.HandlerFactory.CONNECT),
+            arguments=handlers.HandlerFactory.ConnectHandler.ARG_SPEC,
+            help='Connect to the specified Prometheus server'
         )
 
     def run(self):
         self.shell.run()
-
-    #
-    # Builtin Handlers
-    #
-    class FetchHandler(CommandHandler):
-        ARG_SPEC = {  }
-
-        def __init__(self, promshell):
-            self.promshell: PromShell = promshell
-
-        def handle(self, command_args) -> dict:
-            self.promshell.factory.fetch()
-            return dict(result='fetched OK')
 
 
 if __name__ == "__main__":

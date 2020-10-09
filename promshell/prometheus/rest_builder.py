@@ -136,7 +136,7 @@ class Series:
             flags=['-r', '--raw-params'],
             help='raw REST parameters',
             nargs='?',
-            metavar='<rawparams>')
+            metavar='<raw_params>')
     }
 
     @staticmethod
